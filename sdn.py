@@ -11,17 +11,24 @@ class sdn:
         plt.show()
         self.pos = None
         self.colors = {}
-        letters = list(string.ascii_uppercase[:12])
+        n = 8
+        m = 12
+        letters = list(string.ascii_uppercase[:n])
         self.add_node(letters)
-        web=[]
-        while len(letters) > 0:
-            letter = letters.pop(random.randint(0,len(letters)-1))
-            if len(web)==0:
-                web.append(letter)
+        unwebbed = list(string.ascii_uppercase[:n])
+        for i in range(m):
+            if(len(unwebbed)>0):
+                a = unwebbed.pop(random.randint(0,len(unwebbed)-1))
             else:
-                self.add_link([letter,web[random.randint(0,len(web)-1)]])
-                web.append(letter)
+                a = letters[random.randint(0,len(letters)-1)]
+            b = a
+            while b == a or self.graph.has_edge(a,b):
+                b = letters[random.randint(0,len(letters)-1)]
             
+            self.graph.add_edge(a,b,weight=0)
+            
+        self.pos = nx.shell_layout(self.graph)
+        self.update_graph()
             
 
     def add_node(self, nodes):
@@ -53,11 +60,11 @@ class sdn:
         for i in range(len(nodes)-1): 
             n1 = nodes[i]
             n2 = nodes[i+1]
-            if self.graph.has_edge(n1,n2):
+            if self.graph.has_edge(n1,n2) or n1 == n2:
                 if len(nodes)<3:
                     break
                 continue
-            self.graph.add_edge(n1,n2)
+            self.graph.add_edge(n1,n2,weight=0)
             s += str(n1) + "-" + str(n2) + " "
         if s == "":
             print("No links could be made.")
@@ -110,64 +117,46 @@ class sdn:
     def update_graph(self):
         plt.clf()
         colors = [self.colors[n] for n in self.graph.nodes()]
+
         nx.draw(self.graph, self.pos, with_labels=True, node_color=colors)
+
+        edge_labels = nx.get_edge_attributes(self.graph, "weight")
+        nx.draw_networkx_edge_labels(self.graph, self.pos, edge_labels=edge_labels)
         plt.title("lol")
         plt.pause(0.01)
         #nx.draw_networkx_edge_labels()
     
-    def update_flows(self, id):
-        #nx.all_shortest_paths()
+    def update_flows(self, src):
 
-        lengths, paths = nx.single_source_dijkstra(self.graph,id)
+        lengths, paths = nx.single_source_dijkstra(self.graph,src)
         for dst, path in paths.items():
-            if id != dst:
-                self.flowtables[id][dst] = path[0]
+            if src != dst:
+                self.flowtables[src][dst] = path[0]
                 for i in range(len(path)-1):
                         self.flowtables[path[i]][dst] = path[i+1]
 
-    def send_flow(self,src,dst,crit=False):
-        self.update_flows(src)
-        path = []
-        while True:
-            self.colors[src]= "lime"
-            self.update_graph()
-            plt.pause(0.5)
-            path.append(src)
-            self.colors[src] = "yellow"
-            if(src == dst):
-                break
-            src = self.flowtables[src][dst]
-        for node in path:
-            self.colors[node] = "lightblue"
-        self.update_graph()
-        plt.pause(0.5)
-            
-    def send_flows(self,n,flow,dst,crit=False):
-        flows = [flow for j in range(int(n))]
-        done = [False for flow in flows]
-        colors = ["lime","teal","pink"]
-        paths = [[] for flow in flows]
-        while not all(done):
-            for i in range(len(flows)):
-                if(done[i]):
-                    continue
-                src = flows[i]
-                self.update_flows(src)
-                paths[i].append(src)
-                if(src == dst):
-                    done[i]= True
-                    continue
-                flows[i] = self.flowtables[src][dst]
-                self.graph[src][flows[i]]['weight'] = 10
-                self.colors[flows[i]]=colors[i%3]
-                self.colors[paths[i][-1]] = "yellow"
-                plt.pause(0.3)
+    def send_flows(self,srcs,crit=False):
+        for i in range(len(srcs)-1):
+            src = srcs[i]
+            dst = srcs[i+1]
+            self.update_flows(src)
+            path = []
+            self.colors[dst] = "orange"
+            while True:
+                self.colors[src]= "lime"
                 self.update_graph()
-        for path in paths:
+                plt.pause(0.5)
+                path.append(src)
+                self.colors[src] = "yellow"
+                if(src == dst):
+                    break
+                src = self.flowtables[src][dst]
+                self.graph[path[-1]][src]["weight"]+=1
             for node in path:
                 self.colors[node] = "lightblue"
-        self.update_graph()
-        plt.pause(0.5)
+            self.update_graph()
+            plt.pause(0.5)
+        
         
 
     def print_table(self, src = None):
@@ -199,10 +188,7 @@ while True:
     elif a0 == "link":
         controller.add_link(args[1:])
     elif a0 == "send":
-        if len(args) > 3:
-            controller.send_flows(args[1],args[2],args[3])
-        else:
-            controller.send_flow(args[1],args[2])
+        controller.send_flows(args[1:])
     elif a0 == "table":
         controller.print_table(args[1])
     elif a0 == "end":
